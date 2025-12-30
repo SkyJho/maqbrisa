@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Formulário - Contato via WhatsApp</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: url('img/fundo.png') no-repeat center center fixed;
+    background-size: cover;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+
+  form {
+    background: #085a94c7;
+    padding: 25px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  input, select, .botao-whatsapp {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+  }
+
+  .botao-whatsapp {
+    background: #b9d461;
+    color: #085a94;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  .botao-whatsapp:hover {
+    background: #a3c14f;
+  }
+</style>
+</head>
+<body>
+
+<form id="formContato">
+  <h2>Entre em contato</h2>
+
+  <label for="nome">Seu nome:</label>
+  <input type="text" id="nome" placeholder="Ex: Jhonatan" required>
+
+  <label for="estado">Estado:</label>
+  <select id="estado" required>
+    <option value="">Selecione o estado...</option>
+  </select>
+
+  <label for="cidade">Cidade:</label>
+  <select id="cidade" required disabled>
+    <option value="">Selecione o estado primeiro</option>
+  </select>
+
+  <label for="produto">Produto de interesse:</label>
+  <select id="produto" required>
+    <option value="">Selecione...</option>
+    <option value="MB-45 DIGITAL">MB-45 DIGITAL</option>
+    <option value="MB-50 CLASSIC">MB-50 CLASSIC</option>
+    <option value="MB-60 TURBO">MB-60 TURBO</option>
+  </select>
+
+  <button type="submit" class="botao-whatsapp">Enviar pelo WhatsApp</button>
+</form>
+
+<script>
+// 🔹 Carrega os estados
+fetch("https://servicodados.ibge.gov.br/api/v1/localidades/estados")
+  .then(res => res.json())
+  .then(estados => {
+    const selectEstado = document.getElementById("estado");
+    estados.sort((a,b) => a.nome.localeCompare(b.nome));
+    estados.forEach(uf => {
+      const option = document.createElement("option");
+      option.value = uf.sigla;
+      option.textContent = uf.nome;
+      selectEstado.appendChild(option);
+    });
+  });
+
+// 🔹 Quando escolher o estado, carrega as cidades
+document.getElementById("estado").addEventListener("change", function() {
+  const uf = this.value;
+  const selectCidade = document.getElementById("cidade");
+  selectCidade.innerHTML = '<option value="">Carregando cidades...</option>';
+  selectCidade.disabled = true;
+
+  fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`)
+    .then(res => res.json())
+    .then(cidades => {
+      selectCidade.innerHTML = '<option value="">Selecione a cidade...</option>';
+      cidades.forEach(cidade => {
+        const option = document.createElement("option");
+        option.value = cidade.nome;
+        option.textContent = cidade.nome;
+        selectCidade.appendChild(option);
+      });
+      selectCidade.disabled = false;
+    });
+});
+
+// 🔹 Envio para WhatsApp
+document.getElementById("formContato").addEventListener("submit", function(e){
+  e.preventDefault();
+
+  const telefone = "5534999958036"; // número do WhatsApp (DDI + DDD + número)
+
+  const nome = document.getElementById("nome").value;
+  const estado = document.getElementById("estado").value;
+  const cidade = document.getElementById("cidade").value;
+  const produto = document.getElementById("produto").value;
+
+  const texto = `Olá! Me chamo *${nome}* 👋
+Sou de ${cidade}/${estado}.
+Tenho interesse no produto *${produto}*.`
+
+  const url = `https://wa.me/${telefone}?text=${encodeURIComponent(texto)}`;
+  window.open(url, "_blank");
+});
+</script>
+
+</body>
+</html>
