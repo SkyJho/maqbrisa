@@ -18,21 +18,33 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // Atualizar navbar com botão de login/perfil
 function updateNavbar() {
-  const navbarMenu = document.getElementById("navbarMenu")
-  if (!navbarMenu) return
+  try {
+    const navbarMenu = document.getElementById("navbarMenu")
+    if (!navbarMenu) return
 
-  const navbarNav = navbarMenu.querySelector(".navbar-nav")
-  const user = JSON.parse(localStorage.getItem("maqbrisa_session"))
+    const navbarNav = navbarMenu.querySelector(".navbar-nav")
 
-  const existingLoginItem = document.getElementById("navLoginItem")
-  if (existingLoginItem) existingLoginItem.remove()
+    // Proteger JSON.parse contra dados corrompidos
+    let user = null
+    try {
+      const sessionData = localStorage.getItem("maqbrisa_session")
+      if (sessionData) {
+        user = JSON.parse(sessionData)
+      }
+    } catch (parseError) {
+      console.error("[MAIN] Erro ao ler sessão, limpando localStorage:", parseError)
+      localStorage.removeItem("maqbrisa_session")
+      user = null
+    }
 
-  const loginItem = document.createElement("li")
-  loginItem.className = "nav-item"
-  loginItem.id = "navLoginItem"
+    const existingLoginItem = document.getElementById("navLoginItem")
+    if (existingLoginItem) existingLoginItem.remove()
 
-  if (user) {
-    if (user.tipo === "admin") {
+    const loginItem = document.createElement("li")
+    loginItem.className = "nav-item"
+    loginItem.id = "navLoginItem"
+
+    if (user && user.tipo === "admin") {
       loginItem.innerHTML = `
         <div class="dropdown">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
@@ -46,7 +58,7 @@ function updateNavbar() {
           </ul>
         </div>
       `
-    } else {
+    } else if (user) {
       loginItem.innerHTML = `
         <div class="dropdown">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
@@ -59,12 +71,15 @@ function updateNavbar() {
           </ul>
         </div>
       `
+    } else {
+      loginItem.innerHTML = '<a class="nav-link" href="login.html">Entrar</a>'
     }
-  } else {
-    loginItem.innerHTML = '<a class="nav-link" href="login.html">Entrar</a>'
-  }
 
-  navbarNav.appendChild(loginItem)
+    navbarNav.appendChild(loginItem)
+  } catch (error) {
+    console.error("[MAIN] Erro ao atualizar navbar:", error)
+    // Não impedir que produtos/banners carreguem se navbar falhar
+  }
 }
 
 function logout() {
@@ -76,10 +91,17 @@ async function loadDynamicProducts() {
   console.log("[MAIN] Carregando produtos...")
 
   try {
-    const response = await fetch(API_PRODUTOS)
+    // Adicionar timestamp para evitar cache após logout
+    const timestamp = new Date().getTime()
+    const response = await fetch(`${API_PRODUTOS}?_t=${timestamp}`)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
     const data = await response.json()
 
-    if (data.success) {
+    if (data.success && data.produtos && Array.isArray(data.produtos)) {
       const residenciais = data.produtos.filter((p) => p.tipo === "residencial")
       const industriais = data.produtos.filter((p) => p.tipo === "industrial")
 
@@ -87,9 +109,17 @@ async function loadDynamicProducts() {
 
       renderizarProdutos(residenciais, "residenciais")
       renderizarProdutos(industriais, "industriais")
+    } else {
+      // API retornou success: false ou dados inválidos
+      console.warn("[MAIN] API retornou dados inválidos:", data)
+      renderizarProdutos([], "residenciais")
+      renderizarProdutos([], "industriais")
     }
   } catch (error) {
     console.error("[MAIN] Erro ao carregar produtos:", error)
+    // Mostrar containers vazios com mensagem de erro
+    renderizarProdutos([], "residenciais")
+    renderizarProdutos([], "industriais")
   }
 }
 
@@ -100,6 +130,21 @@ function renderizarProdutos(produtos, tipo) {
   if (!container) return
 
   container.innerHTML = ""
+
+  // Mostrar mensagem se não houver produtos
+  if (!produtos || produtos.length === 0) {
+    container.innerHTML = `
+      <div class="col-12">
+        <div class="alert alert-info text-center" role="alert">
+          <p class="mb-0">Nenhum produto ${tipo === "residenciais" ? "residencial" : "industrial"} disponível no momento.</p>
+        </div>
+      </div>
+    `
+    if (paginacaoContainer) {
+      paginacaoContainer.innerHTML = ""
+    }
+    return
+  }
 
   produtos.forEach((produto) => {
     const descId = `desc-${tipo}-${produto.id}`
@@ -227,19 +272,35 @@ async function loadDynamicBanners() {
   console.log("[MAIN] Carregando banners...")
 
   try {
-    const response = await fetch(API_BANNERS)
+    // Adicionar timestamp para evitar cache após logout
+    const timestamp = new Date().getTime()
+    const response = await fetch(`${API_BANNERS}?_t=${timestamp}`)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
     const data = await response.json()
 
-    if (data.success) {
+    if (data.success && data.banners) {
       const carouselImages = document.querySelectorAll("#bannerCarousel .carousel-item img")
 
-      if (data.banners.banner1) carouselImages[0].src = data.banners.banner1
-      if (data.banners.banner2) carouselImages[1].src = data.banners.banner2
-      if (data.banners.banner3) carouselImages[2].src = data.banners.banner3
+      if (carouselImages.length >= 3) {
+        if (data.banners.banner1) carouselImages[0].src = data.banners.banner1
+        if (data.banners.banner2) carouselImages[1].src = data.banners.banner2
+        if (data.banners.banner3) carouselImages[2].src = data.banners.banner3
 
-      console.log("[MAIN] Banners carregados")
+        console.log("[MAIN] Banners carregados com sucesso")
+      } else {
+        console.warn("[MAIN] Carrossel não encontrado ou incompleto")
+      }
+    } else {
+      console.warn("[MAIN] API de banners retornou dados inválidos:", data)
+      // Manter banners padrão do HTML se API falhar
     }
   } catch (error) {
     console.error("[MAIN] Erro ao carregar banners:", error)
+    // Manter banners padrão do HTML em caso de erro
+    console.log("[MAIN] Usando banners padrão devido a erro de carregamento")
   }
 }
